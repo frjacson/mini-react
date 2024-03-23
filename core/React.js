@@ -45,13 +45,3 @@ const React = {
 }
 
 export default React;
-
-
-/**
- * 学习小结一、运行的本质是
-1. 将 jsx 通过工具转变成我们熟悉的js文件(Vite中使用了Esbuild帮助构建，实际上是内部转换成React.createElement()执行)
-2. 通过 React.createElement() 函数创建虚拟 dom
-3. 通过ReactDom.render() 方法将 虚拟dom 转换成真实DOM并插入到HTML中
-学习小结二、多子节点render会造成的问题
-如果子节点过多的话，会不断的通过递归运行render函数，而递归的过程是不可中断的，会造成主线程一直再负责render这件事，render一直在运行，导致如果此时用户去操作DOM等其他事件时，主线程将无法及时相应，造成页面的卡顿。
- */
