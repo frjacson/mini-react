@@ -1,7 +1,7 @@
 function render(el, container) {
   const dom = el.type === 'TEXT_ELEMENT' ? document.createTextNode(el.props.nodeValue) : document.createElement(el.type);
 
-  //! class id ... 将虚拟dom上面的属性对应在 真是 dom 中
+  //! class id ... 将虚拟dom上面的属性对应在 真实 dom 中
   Object.keys(el.props).forEach((key) => {
     if (key !== 'children') {
       dom[key] = el.props[key];
