@@ -1,19 +1,25 @@
 function render(el, container) {
-  const dom = el.type === 'TEXT_ELEMENT' ? document.createTextNode(el.props.nodeValue) : document.createElement(el.type);
-
-  //! class id ... 将虚拟dom上面的属性对应在 真实 dom 中
-  Object.keys(el.props).forEach((key) => {
-    if (key !== 'children') {
-      dom[key] = el.props[key];
+  nextWorkOfUnit = {
+    dom: container,
+    props: {
+      children: [el],
     }
-  })
+  };
+  // const dom = el.type === 'TEXT_ELEMENT' ? document.createTextNode(el.props.nodeValue) : document.createElement(el.type);
 
-  //! 递归渲染子节点
-  const children = el.props.children;
-  children.forEach((child) => {
-    render(child, dom);
-  })
-  container.append(dom);
+  // //! class id ... 将虚拟dom上面的属性对应在 真实 dom 中
+  // Object.keys(el.props).forEach((key) => {
+  //   if (key !== 'children') {
+  //     dom[key] = el.props[key];
+  //   }
+  // })
+
+  // //! 递归渲染子节点
+  // const children = el.props.children;
+  // children.forEach((child) => {
+  //   render(child, dom);
+  // })
+  // container.append(dom);
 }
 
 function createTextNode(text) {
@@ -37,6 +43,80 @@ function createElement(type, props, ...children) {
     }
   }
 }
+
+// 任务调度器
+let nextWorkOfUnit = null;
+
+function workLoop(deadline) {
+  let shouldYeild = false;
+  while (!shouldYeild && nextWorkOfUnit) {
+    // run task
+    nextWorkOfUnit = performWorkOfUnit(nextWorkOfUnit);
+    shouldYeild = deadline.timeRemaining() > 1;
+  }
+  requestIdleCallback(workLoop);
+}
+
+function createDom(type) {
+  const dom = type === 'TEXT_ELEMENT' ? document.createTextNode("") : document.createElement(type);
+  return dom;
+}
+
+function updateProps(dom, props) {
+  Object.keys(props).forEach((key) => {
+    if (key !== 'children') {
+      dom[key] = props[key];
+    }
+  })
+}
+
+function initChildren(fiber) {
+  const children = fiber.props.children;
+  let prevChild = null;
+  children.forEach((child, index) => {
+    const newFiber = {
+      type: child.type,
+      props: child.props,
+      child: null,
+      parent: fiber,
+      sibling: null,
+      dom: null,
+    }
+    if (index === 0) {
+      fiber.child = newFiber;
+    } else {
+      prevChild.sibling = newFiber;
+    }
+    prevChild = newFiber;
+  })
+}
+
+function performWorkOfUnit(fiber) {
+  //! 创建dom
+  if (!fiber.dom) {
+    const dom = (fiber.dom = createDom(fiber.type));
+
+    fiber.parent.dom.append(dom);
+
+    //! 处理 props
+    updateProps(dom, fiber.props)
+  }
+
+  //! 转换成链表
+  initChildren(fiber);
+
+  //! 返回下一个要执行的任务
+  if (fiber.child) {
+    return fiber.child;
+  }
+
+  if (fiber.sibling) {
+    return fiber.sibling;
+  }
+  return fiber.parent.sibling;
+}
+
+requestIdleCallback(workLoop);
 
 const React = {
   render,
