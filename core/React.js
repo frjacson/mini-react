@@ -5,6 +5,8 @@ function render(el, container) {
       children: [el],
     }
   };
+
+  root = nextWorkOfUnit;
   // const dom = el.type === 'TEXT_ELEMENT' ? document.createTextNode(el.props.nodeValue) : document.createElement(el.type);
 
   // //! class id ... 将虚拟dom上面的属性对应在 真实 dom 中
@@ -46,6 +48,7 @@ function createElement(type, props, ...children) {
 
 // 任务调度器
 let nextWorkOfUnit = null;
+let root = null;
 
 function workLoop(deadline) {
   let shouldYeild = false;
@@ -54,7 +57,26 @@ function workLoop(deadline) {
     nextWorkOfUnit = performWorkOfUnit(nextWorkOfUnit);
     shouldYeild = deadline.timeRemaining() > 1;
   }
+
+  if (!nextWorkOfUnit && root) {
+    // 当nextWorkOfUnit为空的时候，说明当前已经完成了链表的初始化
+    commitRoot();
+  }
+
   requestIdleCallback(workLoop);
+}
+
+// 统一提交
+function commitRoot() {
+  commitWork(root.child);
+  root = null; // 只执行一次
+}
+
+function commitWork(fiber) {
+  if (!fiber) return;
+  fiber.parent.dom.append(fiber.dom);
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
 }
 
 function createDom(type) {
@@ -96,7 +118,7 @@ function performWorkOfUnit(fiber) {
   if (!fiber.dom) {
     const dom = (fiber.dom = createDom(fiber.type));
 
-    fiber.parent.dom.append(dom);
+    // fiber.parent.dom.append(dom);
 
     //! 处理 props
     updateProps(dom, fiber.props)
