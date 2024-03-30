@@ -4,11 +4,22 @@ import React from "./core/React.js";
 // }, "hi- ", "mini-react");
 
 function Counter({ num }) {
-  return <div>count: {num}</div>;
+  return (
+    <div>
+      count: {count}
+      <button onClick={handleClick}>click</button>
+    </div>
+  );
 }
-
+let count = 11;
 function CounterContainer() {
   return <Counter num={20}></Counter>;
+}
+
+function handleClick() {
+  console.log("current click");
+  count++;
+  React.update();
 }
 
 const App = function () {
@@ -16,7 +27,7 @@ const App = function () {
     <div>
       hi-mini-react
       <Counter num={10}></Counter>
-      <CounterContainer></CounterContainer>
+      {/* <CounterContainer></CounterContainer> */}
     </div>
   );
 };

@@ -1,12 +1,11 @@
 function render(el, container) {
-  nextWorkOfUnit = {
+  wipRoot = {
     dom: container,
     props: {
       children: [el],
     }
   };
-
-  root = nextWorkOfUnit;
+  nextWorkOfUnit = wipRoot;
   // const dom = el.type === 'TEXT_ELEMENT' ? document.createTextNode(el.props.nodeValue) : document.createElement(el.type);
 
   // //! class id ... 将虚拟dom上面的属性对应在 真实 dom 中
@@ -49,7 +48,9 @@ function createElement(type, props, ...children) {
 
 // 任务调度器
 let nextWorkOfUnit = null;
-let root = null;
+// work in progress wipRoot
+let wipRoot = null;
+let currentRoot = null;
 
 function workLoop(deadline) {
   let shouldYeild = false;
@@ -59,7 +60,7 @@ function workLoop(deadline) {
     shouldYeild = deadline.timeRemaining() > 1;
   }
 
-  if (!nextWorkOfUnit && root) {
+  if (!nextWorkOfUnit && wipRoot) {
     // 当nextWorkOfUnit为空的时候，说明当前已经完成了链表的初始化
     commitRoot();
   }
@@ -69,8 +70,9 @@ function workLoop(deadline) {
 
 // 统一提交
 function commitRoot() {
-  commitWork(root.child);
-  root = null; // 只执行一次
+  commitWork(wipRoot.child);
+  currentRoot = wipRoot;
+  wipRoot = null; // 只执行一次
 }
 
 function commitWork(fiber) {
@@ -79,8 +81,12 @@ function commitWork(fiber) {
   while (!fiberParent.dom) {
     fiberParent = fiberParent.parent;
   }
-  if (fiber.dom) {
-    fiberParent.dom.append(fiber.dom);
+  if (fiber.effectTag === 'update') {
+    updateProps(fiber.dom, fiber.props, fiber.alternate.props);
+  } else if (fiber.effectTag === 'placement') {
+    if (fiber.dom) {
+      fiberParent.dom.append(fiber.dom);
+    }
   }
   commitWork(fiber.child);
   commitWork(fiber.sibling);
@@ -91,25 +97,71 @@ function createDom(type) {
   return dom;
 }
 
-function updateProps(dom, props) {
-  Object.keys(props).forEach((key) => {
+function updateProps(dom, nextProps, prevProps) {
+  // 1. old 有 new 没有 删除
+  Object.keys(prevProps).forEach((key) => {
+    if (key !== "children") {
+      if (!(key in nextProps)) {
+        dom.removeAttribute(key);
+      }
+    }
+  });
+  // 2. new 有， old 没有
+  // 3. new 有，old 有
+  Object.keys(nextProps).forEach((key) => {
     if (key !== 'children') {
-      dom[key] = props[key];
+      if (nextProps[key] !== prevProps[key]) {
+        if (key.startsWith("on")) {
+          const eventType = key.slice(2).toLocaleLowerCase();
+          dom.removeEventListener(eventType, prevProps[key]);
+          dom.addEventListener(eventType, nextProps[key]);
+        } else {
+          dom[key] = nextProps[key];
+        }
+      }
     }
   })
 }
 
-function initChildren(fiber, children) {
+function reconcileChildren(fiber, children) {
   let prevChild = null;
+  let oldFiber = null;
+  if (fiber.alternate) {
+    oldFiber = fiber.alternate.child;
+  } else {
+    oldFiber = null;
+  }
   children.forEach((child, index) => {
-    const newFiber = {
-      type: child.type,
-      props: child.props,
-      child: null,
-      parent: fiber,
-      sibling: null,
-      dom: null,
+    const isSameType = oldFiber && oldFiber.type === child.type;
+    let newFiber;
+    if (isSameType) {
+      // update:
+      newFiber = {
+        type: child.type,
+        props: child.props,
+        child: null,
+        parent: fiber,
+        sibling: null,
+        dom: oldFiber.dom,
+        effectTag: "update",
+        alternate: oldFiber
+      }
+    } else {
+      newFiber = {
+        type: child.type,
+        props: child.props,
+        child: null,
+        parent: fiber,
+        sibling: null,
+        dom: null,
+        effectTag: "placement"
+      }
     }
+
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling;
+    }
+
     if (index === 0) {
       fiber.child = newFiber;
     } else {
@@ -121,7 +173,7 @@ function initChildren(fiber, children) {
 
 function updateFunctionComponent(fiber) {
   const children = [fiber.type(fiber.props)]
-  initChildren(fiber, children);
+  reconcileChildren(fiber, children);
 }
 
 function updateHostComponent(fiber) {
@@ -129,12 +181,12 @@ function updateHostComponent(fiber) {
   if (!fiber.dom) {
     const dom = (fiber.dom = createDom(fiber.type));
     //! 处理 props
-    updateProps(dom, fiber.props)
+    updateProps(dom, fiber.props, {})
   }
   const children = fiber.props.children;
 
   //! 转换成链表
-  initChildren(fiber, children);
+  reconcileChildren(fiber, children);
 }
 
 function performWorkOfUnit(fiber) {
@@ -164,8 +216,21 @@ function performWorkOfUnit(fiber) {
 
 requestIdleCallback(workLoop);
 
+function update() {
+  // 新的root
+  wipRoot = {
+    dom: currentRoot.dom,
+    props: currentRoot.props,
+    alternate: currentRoot
+  };
+
+  // 这段语句是触发重新render的关键
+  nextWorkOfUnit = wipRoot;
+}
+
 const React = {
   render,
+  update,
   createElement,
   createTextNode,
 }
