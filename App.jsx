@@ -2,6 +2,7 @@ import React from "./core/React.js";
 // const App = React.createElement("div", {
 //   id: "app"
 // }, "hi- ", "mini-react");
+const update = React.update();
 
 function Counter({ num }) {
   return (
@@ -19,7 +20,7 @@ function CounterContainer() {
 function handleClick() {
   console.log("current click");
   count++;
-  React.update();
+  update();
 }
 
 const App = function () {

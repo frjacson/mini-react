@@ -52,11 +52,19 @@ let nextWorkOfUnit = null;
 let wipRoot = null;
 let currentRoot = null;
 
+let delections = []; //需要删除dom的容器
+let wipFiber = null; // 当前fiber
+
 function workLoop(deadline) {
   let shouldYeild = false;
   while (!shouldYeild && nextWorkOfUnit) {
     // run task
     nextWorkOfUnit = performWorkOfUnit(nextWorkOfUnit);
+
+    if (wipRoot.sibling.type === nextWorkOfUnit.type) {
+      nextWorkOfUnit = undefined; // 手动退出
+    }
+
     shouldYeild = deadline.timeRemaining() > 1;
   }
 
@@ -70,9 +78,24 @@ function workLoop(deadline) {
 
 // 统一提交
 function commitRoot() {
+  delections.forEach(commitDelection);
   commitWork(wipRoot.child);
   currentRoot = wipRoot;
   wipRoot = null; // 只执行一次
+  delections = [];
+}
+
+//! 删除节点
+function commitDelection(fiber) {
+  if (fiber.dom) {
+    let fiberParent = fiber.parent;
+    while (!fiberParent.dom) {
+      fiberParent = fiberParent.parent;
+    }
+    fiberParent.dom.removeChild(fiber.dom);
+  } else {
+    commitDelection(fiber.child);
+  }
 }
 
 function commitWork(fiber) {
@@ -147,19 +170,22 @@ function reconcileChildren(fiber, children) {
         alternate: oldFiber
       }
     } else {
-      newFiber = {
-        type: child.type,
-        props: child.props,
-        child: null,
-        parent: fiber,
-        sibling: null,
-        dom: null,
-        effectTag: "placement"
+      if (child) {
+        newFiber = {
+          type: child.type,
+          props: child.props,
+          child: null,
+          parent: fiber,
+          sibling: null,
+          dom: null,
+          effectTag: "placement"
+        }
       }
     }
 
     if (oldFiber) {
       oldFiber = oldFiber.sibling;
+      delections.push(oldFiber);
     }
 
     if (index === 0) {
@@ -167,8 +193,16 @@ function reconcileChildren(fiber, children) {
     } else {
       prevChild.sibling = newFiber;
     }
-    prevChild = newFiber;
+
+    // 处理边界问题
+    if (newFiber) {
+      prevChild = newFiber;
+    }
   })
+  while (oldFiber) {
+    delections.push(oldFiber);
+    oldFiber = oldFiber.sibling;
+  }
 }
 
 function updateFunctionComponent(fiber) {
@@ -217,15 +251,25 @@ function performWorkOfUnit(fiber) {
 requestIdleCallback(workLoop);
 
 function update() {
-  // 新的root
-  wipRoot = {
-    dom: currentRoot.dom,
-    props: currentRoot.props,
-    alternate: currentRoot
-  };
+  let currentFiber = wipFiber;
+  return () => {
+    console.log(currentFiber);
 
-  // 这段语句是触发重新render的关键
-  nextWorkOfUnit = wipRoot;
+    wipRoot = {
+      ...currentFiber,
+      alternate: currentFiber,
+    }
+    // 新的root
+    // wipRoot = {
+    //   dom: currentRoot.dom,
+    //   props: currentRoot.props,
+    //   alternate: currentRoot
+    // };
+
+
+    // 这段语句是触发重新render的关键
+    nextWorkOfUnit = wipRoot;
+  }
 }
 
 const React = {
